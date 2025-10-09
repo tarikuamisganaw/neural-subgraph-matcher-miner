@@ -1,17 +1,19 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
+# Install Python 3.7 from Ubuntu's default repositories (more stable)
 RUN apt-get update && apt-get install -y \
     software-properties-common \
     curl \
-    && add-apt-repository ppa:deadsnakes/ppa \
+    wget \
     && apt-get update \
     && apt-get install -y \
     python3.7 \
     python3.7-dev \
     python3.7-distutils \
+    python3.7-venv \
     build-essential \
     pkg-config \
     git \
@@ -22,44 +24,53 @@ RUN apt-get update && apt-get install -y \
     libopenblas-dev \
     liblapack-dev \
     libatlas-base-dev \
-    python3-scipy \
     && rm -rf /var/lib/apt/lists/*
 
+# Install pip for Python 3.7
 RUN curl https://bootstrap.pypa.io/pip/3.7/get-pip.py -o get-pip.py \
     && python3.7 get-pip.py \
     && rm get-pip.py
 
+# Create symlinks
 RUN ln -sf /usr/bin/python3.7 /usr/bin/python \
-    && ln -sf /usr/local/bin/pip3.7 /usr/bin/pip \
-    && ln -sf /usr/local/bin/pip3.7 /usr/bin/pip3
+    && ln -sf /usr/local/bin/pip3.7 /usr/bin/pip
 
 WORKDIR /app
 
 COPY requirements.txt .
 
+# Upgrade pip and setuptools first
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
+# Install numpy first (foundation for other packages)
 RUN pip install --no-cache-dir numpy==1.21.6
 
+# Install other dependencies
 RUN pip install --no-cache-dir \
-    matplotlib==2.1.1 \
+    matplotlib==3.5.3 \
     scikit-learn==1.0.2 \
-    seaborn==0.9.0
+    seaborn==0.11.2
 
-RUN pip install torch==1.4.0+cpu torchvision==0.5.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
-
+# Install PyTorch with specific versions that work with Python 3.7
 RUN pip install --no-cache-dir \
-    torch-scatter==2.0.2 \
-    torch-sparse==0.6.1 \
-    torch-cluster==1.5.4 \
-    torch-spline-conv==1.2.0 \
-    torch-geometric==1.4.3 \
-    --find-links https://data.pyg.org/whl/torch-1.4.0+cpu.html
+    torch==1.13.1+cpu \
+    torchvision==0.14.1+cpu \
+    -f https://download.pytorch.org/whl/torch_stable.html
 
+# Install PyTorch Geometric dependencies
 RUN pip install --no-cache-dir \
-    deepsnap==0.1.2 \
-    networkx==2.4 \
+    torch-scatter==2.1.1+pt113cpu \
+    torch-sparse==0.6.17+pt113cpu \
+    torch-cluster==1.6.1+pt113cpu \
+    torch-spline-conv==1.2.2+pt113cpu \
+    torch-geometric==2.3.1 \
+    -f https://data.pyg.org/whl/torch-1.13.0+cpu.html
+
+# Install remaining packages
+RUN pip install --no-cache-dir \
+    deepsnap==0.2.2 \
+    networkx==2.8.8 \
     test-tube==0.7.5 \
-    tqdm==4.43.0
+    tqdm==4.64.1
 
 COPY . .
