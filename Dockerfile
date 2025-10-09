@@ -1,28 +1,27 @@
-FROM ubuntu:20.04
-
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
-
-RUN apt-get update && apt-get install -y \
-    software-properties-common \
-    curl \
-    && add-apt-repository ppa:deadsnakes/ppa \
-    && apt-get update \
-    && apt-get install -y \
-    python3.7 \
-    python3.7-dev \
-    python3.7-distutils \
-    build-essential \
-    pkg-config \
-    git \
-    libfreetype6-dev \
-    libpng-dev \
-    libqhull-dev \
-    gfortran \
-    libopenblas-dev \
-    liblapack-dev \
-    libatlas-base-dev \
-    python3-scipy \
+FROM ubuntu:20.04  
+  
+ENV DEBIAN_FRONTEND=noninteractive  
+ENV PYTHONUNBUFFERED=1  
+  
+RUN apt-get update && apt-get install -y \  
+    software-properties-common \  
+    curl \  
+    && add-apt-repository ppa:deadsnakes/ppa -y  
+  
+RUN apt-get update && apt-get install -y \  
+    python3.7 \  
+    python3.7-dev \  
+    python3.7-distutils \  
+    build-essential \  
+    pkg-config \  
+    git \  
+    libfreetype6-dev \  
+    libpng-dev \  
+    libqhull-dev \  
+    gfortran \  
+    libopenblas-dev \  
+    liblapack-dev \  
+    libatlas-base-dev \  
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl https://bootstrap.pypa.io/pip/3.7/get-pip.py -o get-pip.py \
