@@ -2,9 +2,9 @@ name: Run Decoder
 
 on:
   push:
-    branches: [main,cryptocurrency-dataset]
+    branches: [main,cryptocurrency-dataset,try-old-commit]
   pull_request:
-    branches: [main,cryptocurrency-dataset]
+    branches: [main,cryptocurrency-dataset,try-old-commit]
   workflow_dispatch:
 
 jobs:
