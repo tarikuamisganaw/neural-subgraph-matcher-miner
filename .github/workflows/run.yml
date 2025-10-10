@@ -2,9 +2,9 @@ name: Run Decoder
 
 on:
   push:
-    branches: [main,cryptocurrency-dataset]
+    branches: [main]
   pull_request:
-    branches: [main,cryptocurrency-dataset]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -14,40 +14,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Python 3.7
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.7'
-          
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            libfreetype6-dev \
-            libpng-dev \
-            libqhull-dev \
-            gfortran \
-            libopenblas-dev \
-            liblapack-dev \
-            libatlas-base-dev
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-      - name: Install Python dependencies
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          load: true
+          tags: decoder-image:latest
+          cache-from: |
+            type=local,src=/tmp/.buildx-cache
+          cache-to: |
+            type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Move cache
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          pip install numpy==1.21.6
-          pip install matplotlib==2.1.1 scikit-learn==1.0.2 seaborn==0.9.0
-          pip install torch==1.4.0+cpu torchvision==0.5.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
-          pip install torch-scatter==2.0.2 torch-sparse==0.6.1 torch-cluster==1.5.4 torch-spline-conv==1.2.0 torch-geometric==1.4.3 --find-links https://data.pyg.org/whl/torch-1.4.0+cpu.html
-          pip install deepsnap==0.1.2 networkx==2.4 test-tube==0.7.5 tqdm==4.43.0
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
       - name: Create output directories
         run: |
-          mkdir -p plots/cluster
-          mkdir -p results
-          chmod -R 777 plots
-          chmod -R 777 results
+          mkdir -p ${{ github.workspace }}/plots/cluster
+          mkdir -p ${{ github.workspace }}/results
+          chmod -R 777 ${{ github.workspace }}/plots
+          chmod -R 777 ${{ github.workspace }}/results
 
       - name: Check available processors and usage percentage
         id: cpu-check
@@ -61,48 +60,63 @@ jobs:
           echo "total_cpus=$TOTAL_CPUS" >> $GITHUB_OUTPUT
           echo "percent_used=$PERCENT_USED" >> $GITHUB_OUTPUT
 
-      - name: Run decoder
+      - name: Run decoder in Docker container
         run: |
-          set -e
-          echo 'Starting decoder run...'
-          python -m subgraph_mining.decoder \
-            --dataset=directed.pkl \
-            --n_trials=200 \
-            --node_anchored \
-            --out_path=results/patterns.pkl \
-            --graph_type=directed
-          echo 'Checking output directories...'
-          ls -la plots/cluster
-          ls -la results
-
-      # - name: Run pattern counter
+          docker run --rm \
+            -v ${{ github.workspace }}:/app \
+            -e PYTHONUNBUFFERED=1 \
+            decoder-image:latest \
+            bash -c "
+              set -e
+              echo 'Starting decoder run...'
+              python -m subgraph_mining.decoder \
+                --dataset=directed.pkl \
+                --n_trials=200 \
+                --node_anchored \
+                --out_path=/app/results/patterns.pkl \
+                --graph_type=directed
+              echo 'Checking output directories...'
+              ls -la /app/plots/cluster
+              ls -la /app/results
+              "
+      # - name: Run pattern counter in Docker container
       #   run: |
-      #     set -e
-      #     export PYTHONPATH=.
-      #     echo 'Running pattern counter...'
-      #     python -m analyze.count_patterns \
-      #       --dataset=graph.pkl \
-      #       --queries_path=results/patterns.pkl \
-      #       --out_path=results/ \
-      #       --node_anchored \
-      #       --preserve_labels
-      #     echo 'Counting completed.'
-      #     ls -la results
-
-      - name: Run matcher
+      #     docker run --rm \
+      #       -v ${{ github.workspace }}:/app \
+      #       -e PYTHONUNBUFFERED=1 \
+      #       decoder-image:latest \
+      #       bash -c "
+      #         set -e
+      #         export PYTHONPATH=/app
+      #         echo 'Running pattern counter...'
+      #         python -m analyze.count_patterns \
+      #           --dataset=graph.pkl \
+      #           --queries_path=results/patterns.pkl \
+      #           --out_path=results/ \
+      #           --node_anchored \
+      #           --preserve_labels
+      #         echo 'Counting completed.'
+      #         ls -la /app/results
+      #       "
+      - name: Run matcher in Docker container
         run: |
-          set -e
-          echo 'Starting matcher run on custom gene graph...'
-          python -m subgraph_matching.train \
-            --dataset=graph \
-            --graph_pkl_path=graph.pkl \
-            --node_anchored \
-            --batch_size 16 \
-            --val_size 128
-          echo 'Checking output directories...'
-          ls -la results
-          ls -la plots
-
+          docker run --rm \
+            -v ${{ github.workspace }}:/app \
+            -e PYTHONUNBUFFERED=1 \
+            decoder-image:latest \
+            bash -c "
+              set -e
+              echo 'Starting matcher run on custom gene graph...'
+              python -m subgraph_matching.train \
+                --dataset=graph \
+                --graph_pkl_path=graph.pkl \
+                --node_anchored \
+                --batch_size 16 \
+                --val_size 128
+              echo 'Checking output directories...'
+              ls -la /app/results
+              ls -la /app/plots
+            "
       - name: Check for generated files
         run: |
           echo "Checking plots directory:"
