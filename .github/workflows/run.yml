@@ -16,8 +16,8 @@ jobs:
 
       - name: Pull prebuilt Docker image
         run: |
-          docker login -u tarikua123 -p ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-          docker pull tarikua123/decoder-image:latest
+          docker login -u samribahta -p ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          docker pull samribahta/decoder-image:latest
 
       - name: Create output directories
         run: |
