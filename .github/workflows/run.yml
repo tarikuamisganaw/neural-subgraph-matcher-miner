@@ -16,7 +16,6 @@ jobs:
 
       - name: Pull prebuilt Docker image
         run: |
-          docker login -u samribahta -p ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
           docker pull samribahta/decoder-image:latest
 
       - name: Create output directories
