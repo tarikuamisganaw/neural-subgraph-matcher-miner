@@ -1,66 +1,110 @@
-import zipfile
-import pandas as pd
-import networkx as nx
-import pickle
-
-def convert_zip_to_pkl(zip_path, output_pkl, sample_size=50000):
-    """
-    Convert directly from ZIP file without extracting
-    """
-    print(f"Processing {zip_path}...")
-    
-    G = nx.DiGraph()
-    processed = 0
-    
-    with zipfile.ZipFile(zip_path, 'r') as z:
-        # Find the main CSV file inside ZIP
-        csv_files = [name for name in z.namelist() if name.endswith('.csv')]
-        if not csv_files:
-            raise Exception("No CSV files found in ZIP")
-        
-        main_csv = csv_files[0]  # Use the first CSV found
-        print(f"Found CSV: {main_csv}")
-        
-        # Stream and process the CSV
-        with z.open(main_csv) as f:
-            # Process in chunks to manage memory
-            chunk_size = 10000
-            for chunk in pd.read_csv(f, chunksize=chunk_size, nrows=sample_size):
-                for _, row in chunk.iterrows():
-                    from_addr = row.get('from_address') or row.get('from')
-                    to_addr = row.get('to_address') or row.get('to')
-                    
-                    if from_addr and to_addr:
-                        # Add nodes
-                        if from_addr not in G:
-                            G.add_node(from_addr, label='address', id=str(from_addr))
-                        if to_addr not in G:
-                            G.add_node(to_addr, label='address', id=str(to_addr))
-                        
-                        # Add edge with attributes
-                        edge_attrs = {}
-                        if 'value' in row and pd.notna(row['value']):
-                            edge_attrs['value'] = float(row['value'])
-                        if 'token_symbol' in row:
-                            edge_attrs['token'] = str(row['token_symbol'])
-                        
-                        G.add_edge(from_addr, to_addr, **edge_attrs)
-                    
-                    processed += 1
-                    if processed % 10000 == 0:
-                        print(f"Processed {processed} transactions...")
-                
-                if processed >= sample_size:
-                    break
-    
-    print(f"Final graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
-    
-    # Save the graph
-    with open(output_pkl, 'wb') as f:
-        pickle.dump(G, f)
-    
-    print(f"Saved to {output_pkl}")
-    return G
-
-# Usage - this won't extract the full ZIP!
-convert_zip_to_pkl('/home/tarik/Downloads/neurograph/neural-subgraph-matcher-miner/script/data/ERC20-stablecoins.zip', '/home/tarik/Downloads/neurograph/neural-subgraph-matcher-miner/stablecoin_sample.pkl', 50000)
+import zipfile  
+import pandas as pd  
+import networkx as nx  
+import pickle  
+import torch  
+  
+def convert_zip_to_pkl(zip_path, output_pkl, sample_size=50000):  
+    """  
+    Convert cryptocurrency transaction data from ZIP file to NetworkX graph pickle.  
+    Creates a directed graph compatible with the neural subgraph matcher-miner system.  
+    """  
+    print(f"Processing {zip_path}...")  
+      
+    # Create directed graph for cryptocurrency transactions  
+    G = nx.DiGraph()  
+    processed = 0  
+      
+    with zipfile.ZipFile(zip_path, 'r') as z:  
+        # Find the main CSV file inside ZIP  
+        csv_files = [name for name in z.namelist() if name.endswith('.csv')]  
+        if not csv_files:  
+            raise Exception("No CSV files found in ZIP")  
+          
+        main_csv = csv_files[0]  
+        print(f"Found CSV: {main_csv}")  
+          
+        # Stream and process the CSV  
+        with z.open(main_csv) as f:  
+            chunk_size = 10000  
+            for chunk in pd.read_csv(f, chunksize=chunk_size, nrows=sample_size):  
+                for _, row in chunk.iterrows():  
+                    from_addr = row.get('from_address') or row.get('from')  
+                    to_addr = row.get('to_address') or row.get('to')  
+                      
+                    if from_addr and to_addr:  
+                        # Add nodes with required attributes  
+                        if from_addr not in G:  
+                            G.add_node(  
+                                from_addr,  
+                                label='address',  
+                                id=str(from_addr),  
+                                node_feature=torch.tensor([1.0])  # Required for training  
+                            )  
+                        if to_addr not in G:  
+                            G.add_node(  
+                                to_addr,  
+                                label='address',  
+                                id=str(to_addr),  
+                                node_feature=torch.tensor([1.0])  # Required for training  
+                            )  
+                          
+                        # Add edge with attributes  
+                        edge_attrs = {'weight': 1.0}  # Default weight  
+                        if 'value' in row and pd.notna(row['value']):  
+                            edge_attrs['value'] = float(row['value'])  
+                        if 'token_symbol' in row and pd.notna(row['token_symbol']):  
+                            edge_attrs['token'] = str(row['token_symbol'])  
+                            edge_attrs['type'] = str(row['token_symbol'])  # For edge type visualization  
+                          
+                        G.add_edge(from_addr, to_addr, **edge_attrs)  
+                      
+                    processed += 1  
+                    if processed % 10000 == 0:  
+                        print(f"Processed {processed} transactions...")  
+                  
+                if processed >= sample_size:  
+                    break  
+      
+    print(f"Final graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")  
+      
+    # Save as NetworkX graph directly (not as dict)  
+    with open(output_pkl, 'wb') as f:  
+        pickle.dump(G, f)  
+      
+    print(f"Saved to {output_pkl}")  
+      
+    # Verify the saved file  
+    verify_saved_graph(output_pkl)  
+      
+    return G  
+  
+def verify_saved_graph(pkl_path):  
+    """Verify that the saved pickle file is in the correct format"""  
+    print(f"\nVerifying {pkl_path}...")  
+    with open(pkl_path, 'rb') as f:  
+        data = pickle.load(f)  
+        print(f"Type: {type(data)}")  
+        print(f"Is NetworkX Graph: {isinstance(data, (nx.Graph, nx.DiGraph))}")  
+        if isinstance(data, (nx.Graph, nx.DiGraph)):  
+            print(f"Graph type: {'Directed' if data.is_directed() else 'Undirected'}")  
+            print(f"Nodes: {data.number_of_nodes()}, Edges: {data.number_of_edges()}")  
+              
+            # Check node attributes  
+            sample_node = list(data.nodes())[0]  
+            print(f"Sample node attributes: {data.nodes[sample_node]}")  
+              
+            # Check edge attributes  
+            if data.number_of_edges() > 0:  
+                sample_edge = list(data.edges())[0]  
+                print(f"Sample edge attributes: {data.edges[sample_edge]}")  
+        else:  
+            print("WARNING: File is not a NetworkX graph!")  
+  
+# Usage  
+if __name__ == "__main__":  
+    convert_zip_to_pkl(  
+        zip_path='/home/tarik/Downloads/neurograph/neural-subgraph-matcher-miner/script/data/ERC20-stablecoins.zip',  
+        output_pkl='stablecoin_sample.pkl',  # Save to repo root for workflow  
+        sample_size=50000  
+    )
