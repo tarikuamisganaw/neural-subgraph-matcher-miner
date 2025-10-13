@@ -63,4 +63,4 @@ def convert_zip_to_pkl(zip_path, output_pkl, sample_size=50000):
     return G
 
 # Usage - this won't extract the full ZIP!
-convert_zip_to_pkl('ERC20-stablecoins.zip', 'stablecoin_sample.pkl', 50000)
+convert_zip_to_pkl('/home/tarik/Downloads/neurograph/neural-subgraph-matcher-miner/script/data/ERC20-stablecoins.zip', '/home/tarik/Downloads/neurograph/neural-subgraph-matcher-miner/stablecoin_sample.pkl', 50000)

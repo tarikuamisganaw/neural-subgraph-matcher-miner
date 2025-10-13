@@ -47,7 +47,7 @@ jobs:
               set -e
               echo 'Starting decoder run...'
               python -m subgraph_mining.decoder \
-                --dataset=directed.pkl \
+                --dataset=stablecoin_sample.pkl \
                 --n_trials=200 \
                 --node_anchored \
                 --out_path=/app/results/patterns.pkl \
@@ -68,7 +68,7 @@ jobs:
               echo 'Starting matcher run on custom gene graph...'
               python -m subgraph_matching.train \
                 --dataset=graph \
-                --graph_pkl_path=graph.pkl \
+                --graph_pkl_path=stablecoin_sample.pkl \
                 --node_anchored \
                 --batch_size 16 \
                 --val_size 128
