@@ -2,9 +2,9 @@ name: Run Decoder
   
 on:  
   push:  
-    branches: [main,crypto,new]  
+    branches: [main,crypto]  
   pull_request:  
-    branches: [main,crypto,new]  
+    branches: [main,crypto]  
   workflow_dispatch:  
   
 jobs:  
