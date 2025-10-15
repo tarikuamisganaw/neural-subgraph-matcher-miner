@@ -6,8 +6,8 @@ import torch
   
 def convert_zip_to_pkl(zip_path, output_pkl, sample_size=50000):  
     """  
-    Convert cryptocurrency transaction data from ZIP file to NetworkX graph pickle.  
-    Creates a directed graph compatible with the neural subgraph matcher-miner system.  
+    Convert cryptocurrency transaction data from ZIP file to the EXPECTED dictionary format.  
+    Creates a format compatible with the neural subgraph matcher-miner system.  
     """  
     print(f"Processing {zip_path}...")  
       
@@ -38,15 +38,13 @@ def convert_zip_to_pkl(zip_path, output_pkl, sample_size=50000):
                             G.add_node(  
                                 from_addr,  
                                 label='address',  
-                                id=str(from_addr),  
-                                node_feature=torch.tensor([1.0])  # Required for training  
+                                id=str(from_addr)
                             )  
                         if to_addr not in G:  
                             G.add_node(  
                                 to_addr,  
                                 label='address',  
-                                id=str(to_addr),  
-                                node_feature=torch.tensor([1.0])  # Required for training  
+                                id=str(to_addr)
                             )  
                           
                         # Add edge with attributes  
@@ -68,16 +66,22 @@ def convert_zip_to_pkl(zip_path, output_pkl, sample_size=50000):
       
     print(f"Final graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")  
       
-    # Save as NetworkX graph directly (not as dict)  
+    # ✅ FIX: Convert to the EXPECTED dictionary format with 'nodes' and 'edges' keys
+    graph_data = {
+        'nodes': list(G.nodes(data=True)),  # This is what the code expects
+        'edges': list(G.edges(data=True))   # This is what the code expects
+    }
+      
+    # Save as dictionary (not as NetworkX graph)
     with open(output_pkl, 'wb') as f:  
-        pickle.dump(G, f)  
+        pickle.dump(graph_data, f)  
       
     print(f"Saved to {output_pkl}")  
       
     # Verify the saved file  
     verify_saved_graph(output_pkl)  
       
-    return G  
+    return graph_data  
   
 def verify_saved_graph(pkl_path):  
     """Verify that the saved pickle file is in the correct format"""  
@@ -85,21 +89,19 @@ def verify_saved_graph(pkl_path):
     with open(pkl_path, 'rb') as f:  
         data = pickle.load(f)  
         print(f"Type: {type(data)}")  
-        print(f"Is NetworkX Graph: {isinstance(data, (nx.Graph, nx.DiGraph))}")  
-        if isinstance(data, (nx.Graph, nx.DiGraph)):  
-            print(f"Graph type: {'Directed' if data.is_directed() else 'Undirected'}")  
-            print(f"Nodes: {data.number_of_nodes()}, Edges: {data.number_of_edges()}")  
-              
-            # Check node attributes  
-            sample_node = list(data.nodes())[0]  
-            print(f"Sample node attributes: {data.nodes[sample_node]}")  
-              
-            # Check edge attributes  
-            if data.number_of_edges() > 0:  
-                sample_edge = list(data.edges())[0]  
-                print(f"Sample edge attributes: {data.edges[sample_edge]}")  
+        print(f"Is dict: {isinstance(data, dict)}")  
+        if isinstance(data, dict):  
+            print(f"Dict keys: {list(data.keys())}")  
+            if 'nodes' in data:  
+                print(f"Number of nodes: {len(data['nodes'])}")  
+                if len(data['nodes']) > 0:  
+                    print(f"Sample node: {data['nodes'][0]}")  
+            if 'edges' in data:  
+                print(f"Number of edges: {len(data['edges'])}")  
+                if len(data['edges']) > 0:  
+                    print(f"Sample edge: {data['edges'][0]}")  
         else:  
-            print("WARNING: File is not a NetworkX graph!")  
+            print("WARNING: File is not a dictionary!")  
   
 # Usage  
 if __name__ == "__main__":  
