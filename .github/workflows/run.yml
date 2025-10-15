@@ -15,7 +15,8 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Pull prebuilt Docker image
-        run: docker pull tarikua123/decoder-image:latest
+        run: |
+          docker pull tarikua123/decoder-image:latest
 
       - name: Create output directories
         run: |
@@ -24,7 +25,19 @@ jobs:
           chmod -R 777 ${{ github.workspace }}/plots
           chmod -R 777 ${{ github.workspace }}/results
 
-      - name: Run matcher
+      - name: Check available processors and usage percentage
+        id: cpu-check
+        run: |
+          TOTAL_CPUS=$(nproc)
+          USED_CPUS=4
+          PERCENT_USED=$(( 100 * USED_CPUS / TOTAL_CPUS ))
+          echo "Total available processors: $TOTAL_CPUS"
+          echo "Processors used for decoder: $USED_CPUS"
+          echo "Percent of processors used: ${PERCENT_USED}%"
+          echo "total_cpus=$TOTAL_CPUS" >> $GITHUB_OUTPUT
+          echo "percent_used=$PERCENT_USED" >> $GITHUB_OUTPUT
+
+      - name: Run decoder in Docker container
         run: |
           docker run --rm \
             --shm-size=2g \
@@ -33,44 +46,63 @@ jobs:
             tarikua123/decoder-image:latest \
             bash -c "
               set -e
-              echo 'Starting matcher...'
+              echo 'Starting decoder run...'
+              python -m subgraph_mining.decoder \
+                --dataset=stablecoin_sample.pkl \
+                --n_trials=200 \
+                --node_anchored \
+                --out_path=/app/results/patterns.pkl \
+                --graph_type=directed
+              echo 'Checking output directories...'
+              ls -la /app/plots/cluster
+              ls -la /app/results
+            "
+
+      - name: Run matcher in Docker container
+        run: |
+          docker run --rm \
+            --shm-size=2g \
+            -v ${{ github.workspace }}:/app \
+            -e PYTHONUNBUFFERED=1 \
+            tarikua123/decoder-image:latest \
+            bash -c "
+              set -e
+              echo 'Starting matcher run on cryptocurrency dataset...'
               python -m subgraph_matching.train \
                 --dataset=graph \
                 --graph_pkl_path=stablecoin_sample.pkl \
                 --node_anchored \
-                --batch_size 4 \
-                --val_size 16 \
-                --epochs 2 \
-                --n_workers 2
-              echo '✅ Matcher completed successfully!'
+                --batch_size 16 \
+                --val_size 128
+              echo 'Checking output directories...'
+              ls -la /app/results
+              ls -la /app/plots
             "
 
-      - name: Run decoder
+      - name: Check for generated files
         run: |
-          docker run --rm \
-            --shm-size=2g \
-            -v ${{ github.workspace }}:/app \
-            -e PYTHONUNBUFFERED=1 \
-            tarikua123/decoder-image:latest \
-            bash -c "
-              set -e
-              echo 'Starting decoder...'
-              python -m subgraph_mining.decoder \
-                --dataset=stablecoin_sample.pkl \
-                --n_trials=20 \
-                --node_anchored \
-                --out_path=/app/results/patterns.pkl \
-                --graph_type=directed
-              echo '✅ Decoder completed successfully!'
-              ls -la /app/results/
-            "
+          echo "Checking plots directory:"
+          ls -R plots/ || echo "No plots directory found"
+          echo "Checking results directory:"
+          ls -R results/ || echo "No results directory found"
 
-      - name: Upload results
+      - name: Upload plots as artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: neural-subgraph-results
+          name: decoder-plots
           path: |
-            results/
             plots/
+            results/
           retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: decoder-logs
+          path: |
+            *.log
+            *.err
+          if-no-files-found: ignore
