@@ -2,9 +2,9 @@ name: Run Decoder
 
 on:
   push:
-    branches: [main, crypto,reduce-bathches-to-fix-timeout]
+    branches: [main, crypto]
   pull_request:
-    branches: [main, crypto,reduce-bathches-to-fix-timeout]
+    branches: [main, crypto]
   workflow_dispatch:
 
 jobs:
@@ -69,14 +69,14 @@ jobs:
               set -e
               echo 'Starting matcher run on cryptocurrency dataset...'
               python -m subgraph_matching.train \
-                --dataset=graph \  
-                --graph_pkl_path=stablecoin_network.pkl \  
-                --node_anchored \  
-                --batch_size 32 \  
-                --val_size 128 \  
-                --n_batches 5000 \  
-                --eval_interval 1000 \  
-                --n_workers 2             
+                --dataset=graph \
+                --graph_pkl_path=stablecoin_network.pkl \
+                --node_anchored \
+                --batch_size 16 \
+                --val_size 128 \
+                --n_batches 5000 \
+                --eval_interval 1000 \
+                --n_workers 2
               echo 'Checking output directories...'
               ls -la /app/results
               ls -la /app/plots
