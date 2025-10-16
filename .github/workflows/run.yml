@@ -2,9 +2,9 @@ name: Run Decoder
 
 on:
   push:
-    branches: [main, crypto]
+    branches: [main, crypto,reduce-bathches-to-fix-timeout]
   pull_request:
-    branches: [main, crypto]
+    branches: [main, crypto,reduce-bathches-to-fix-timeout]
   workflow_dispatch:
 
 jobs:
