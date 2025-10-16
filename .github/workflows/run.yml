@@ -73,7 +73,10 @@ jobs:
                 --graph_pkl_path=stablecoin_network.pkl \
                 --node_anchored \
                 --batch_size 16 \
-                --val_size 128
+                --val_size 128 \
+                --n_batches 5000 \           # ✅ Reduced from 10000 to 5000
+                --eval_interval 500 \        # ✅ Reduced evaluation frequency
+                --n_workers 2                # ✅ Reduced from 4 to 2 workers
               echo 'Checking output directories...'
               ls -la /app/results
               ls -la /app/plots
