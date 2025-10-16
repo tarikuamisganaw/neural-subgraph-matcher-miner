@@ -69,13 +69,13 @@ jobs:
               set -e
               echo 'Starting matcher run on cryptocurrency dataset...'
               python -m subgraph_matching.train \
-                --dataset=graph \
-                --graph_pkl_path=stablecoin_network.pkl \
-                --node_anchored \
-                --batch_size 32 \
-                --val_size 128 \
-                --n_batches 5000 \         
-                --eval_interval 1000 \     
+                --dataset=graph \  
+                --graph_pkl_path=stablecoin_network.pkl \  
+                --node_anchored \  
+                --batch_size 32 \  
+                --val_size 128 \  
+                --n_batches 5000 \  
+                --eval_interval 1000 \  
                 --n_workers 2             
               echo 'Checking output directories...'
               ls -la /app/results
