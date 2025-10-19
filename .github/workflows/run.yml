@@ -58,26 +58,26 @@ jobs:
               ls -la /app/results
             "
 
-      - name: Run matcher in Docker container
-        run: |
-          docker run --rm \
-            --shm-size=2g \
-            -v ${{ github.workspace }}:/app \
-            -e PYTHONUNBUFFERED=1 \
-            tarikua123/decoder-image:latest \
-            bash -c "
-              set -e
-              echo 'Starting matcher run on cryptocurrency dataset...'
-              python -m subgraph_matching.train \
-                --dataset=graph \
-                --graph_pkl_path=graph.pkl \
-                --node_anchored \
-                --batch_size 16 \
-                --val_size 128
-              echo 'Checking output directories...'
-              ls -la /app/results
-              ls -la /app/plots
-            "
+      # - name: Run matcher in Docker container
+      #   run: |
+      #     docker run --rm \
+      #       --shm-size=2g \
+      #       -v ${{ github.workspace }}:/app \
+      #       -e PYTHONUNBUFFERED=1 \
+      #       tarikua123/decoder-image:latest \
+      #       bash -c "
+      #         set -e
+      #         echo 'Starting matcher run on cryptocurrency dataset...'
+      #         python -m subgraph_matching.train \
+      #           --dataset=graph \
+      #           --graph_pkl_path=graph.pkl \
+      #           --node_anchored \
+      #           --batch_size 16 \
+      #           --val_size 128
+      #         echo 'Checking output directories...'
+      #         ls -la /app/results
+      #         ls -la /app/plots
+      #       "
 
       - name: Check for generated files
         run: |
