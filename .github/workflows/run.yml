@@ -48,7 +48,7 @@ jobs:
               set -e
               echo 'Starting decoder run...'
               python -m subgraph_mining.decoder \
-                --dataset=stablecoin_network1.pkl \
+                --dataset=stablecoin_network2.pkl \
                 --n_trials=200 \
                 --node_anchored \
                 --out_path=/app/results/patterns.pkl \

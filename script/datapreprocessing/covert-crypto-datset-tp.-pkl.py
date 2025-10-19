@@ -2,10 +2,11 @@ import pandas as pd
 import networkx as nx  
 import pickle  
 import numpy as np
-  
-def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):  # Reduced to 8000 for speed
+
+def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):  
     """  
     Convert token_transfers.csv to optimized graph format for faster processing.  
+    Nodes use actual addresses as IDs and include numeric features for GNNs.
     """  
     print(f"Processing {csv_path} with optimized sample size {sample_size}...")  
       
@@ -28,13 +29,12 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):  # R
                 from_addr = str(from_addr).lower()
                 to_addr = str(to_addr).lower()
                 
-                # Add nodes with minimal attributes
+                # Add nodes with minimal attributes + numeric feature [0,0] for regular nodes
                 if from_addr not in G:  
-                    G.add_node(from_addr, label='address')  
+                    G.add_node(from_addr, label='address', feature=[0.0, 0.0])  
                 if to_addr not in G:  
-                    G.add_node(to_addr, label='address')  
+                    G.add_node(to_addr, label='address', feature=[0.0, 0.0])  
                   
-              
                 token_name = 'unknown'
                 if 'contract_address' in row and pd.notna(row['contract_address']):
                     token_contract = str(row['contract_address'])
@@ -56,7 +56,7 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):  # R
                 if 'value' in row and pd.notna(row['value']):  
                     amount = float(row['value'])
                     edge_attrs['amount'] = amount  # Store amount separately
-                    #  Weight stays as 1.0 - no bias toward large transactions
+                    # Weight stays as 1.0 - no bias toward large transactions
                     
                 # Add token contract for reference
                 if token_name != 'unknown':
@@ -74,10 +74,32 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):  # R
     print(f" Final graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")  
     
     # Remove isolated nodes to create cleaner, faster-to-process graph
-    initial_nodes = G.number_of_nodes()
     isolated_nodes = list(nx.isolates(G))
     G.remove_nodes_from(isolated_nodes)
     print(f"Removed {len(isolated_nodes)} isolated nodes for cleaner graph")
+    
+    # === ADD ANCHOR NODES HERE ===
+    anchor1 = "ANCHOR_1"
+    anchor2 = "ANCHOR_2"
+    
+    # Add anchor nodes with special features
+    G.add_node(anchor1, label="anchor", feature=[1.0, 0.0], is_anchor=True)
+    G.add_node(anchor2, label="anchor", feature=[0.0, 1.0], is_anchor=True)
+    
+    # Connect anchors to a central node (for alignment)
+    if len(G.nodes()) > 2:  # Ensure there are non-anchor nodes
+        # Pick the node with highest degree as "central"
+        degrees = dict(G.degree())
+        central_node = max(degrees, key=degrees.get)
+        G.add_edge(anchor1, central_node, label="anchor_edge", type="anchor", weight=0.0)
+        G.add_edge(anchor2, central_node, label="anchor_edge", type="anchor", weight=0.0)
+    else:
+        # Fallback: connect to first node
+        first_node = list(G.nodes())[0]
+        G.add_edge(anchor1, first_node, label="anchor_edge", type="anchor", weight=0.0)
+        G.add_edge(anchor2, first_node, label="anchor_edge", type="anchor", weight=0.0)
+    
+    print(f"Added 2 anchor nodes for node-anchored GNN training.")
     
     # Analyze the final graph
     analyze_final_graph(G)
@@ -94,7 +116,6 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):  # R
       
     print(f" Saved optimized network to {output_pkl}")  
    
-      
     return graph_data  
 
 def analyze_final_graph(G):
@@ -136,9 +157,21 @@ def analyze_final_graph(G):
             print(f"     Label: {attrs.get('label', 'N/A')}")
             print(f"     Weight: {attrs.get('weight', 'N/A')}")
             print(f"     Amount: {attrs.get('amount', 'N/A')}")
+        
+        # Check node features
+        print(f"\n🔍 Node feature verification:")
+        nodes_with_features = 0
+        anchor_count = 0
+        for node, attrs in G.nodes(data=True):
+            if 'feature' in attrs:
+                nodes_with_features += 1
+                if attrs.get('label') == 'anchor':
+                    anchor_count += 1
+        print(f"   - Nodes with 'feature': {nodes_with_features}/{G.number_of_nodes()}")
+        print(f"   - Anchor nodes detected: {anchor_count}")
 
 def verify_saved_graph(pkl_path):  
-    """Verify that the saved pickle file has proper edge labels"""  
+    """Verify that the saved pickle file has proper edge labels and node features"""  
     print(f"\nVerifying {pkl_path}...")  
     with open(pkl_path, 'rb') as f:  
         data = pickle.load(f)  
@@ -149,13 +182,21 @@ def verify_saved_graph(pkl_path):
                 sample_edge = data['edges'][0]
                 print(f"Sample edge attributes: {sample_edge[2]}")
                 print(f"Edge has 'label': {'label' in sample_edge[2]}")
-                print(f" Edge has 'type': {'type' in sample_edge[2]}")
-                print(f" Edge weight is 1.0: {sample_edge[2].get('weight') == 1.0}")
+                print(f"Edge has 'type': {'type' in sample_edge[2]}")
+                print(f"Edge weight is 1.0: {sample_edge[2].get('weight') == 1.0}")
+            
+            if 'nodes' in data and len(data['nodes']) > 0:
+                sample_node = data['nodes'][0]
+                print(f"\nSample node: {sample_node[0]}")
+                print(f"Node attributes: {sample_node[1]}")
+                print(f"Node has 'feature': {'feature' in sample_node[1]}")
+                if 'feature' in sample_node[1]:
+                    print(f"Feature vector: {sample_node[1]['feature']}")
 
 # Usage  
 if __name__ == "__main__":  
     convert_token_transfers_to_pkl(  
         csv_path='/home/tarik/Downloads/neurograph/neural-subgraph-matcher-miner/script/data/token_transfers.csv',
-        output_pkl='stablecoin_network1.pkl',
-        sample_size=8000  #  Reduced for faster training
+        output_pkl='stablecoin_network2.pkl',
+        sample_size=8000  # Reduced for faster training
     )
