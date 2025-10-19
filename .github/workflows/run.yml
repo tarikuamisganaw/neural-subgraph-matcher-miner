@@ -70,7 +70,7 @@ jobs:
               echo 'Starting matcher run on cryptocurrency dataset...'
               python -m subgraph_matching.train \
                 --dataset=graph \
-                --graph_pkl_path=stablecoin_network1.pkl \
+                --graph_pkl_path=graph.pkl \
                 --node_anchored \
                 --batch_size 16 \
                 --val_size 128
