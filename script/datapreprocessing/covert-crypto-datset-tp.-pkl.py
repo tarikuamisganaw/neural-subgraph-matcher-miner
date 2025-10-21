@@ -1,12 +1,14 @@
 import pandas as pd  
 import networkx as nx  
 import pickle  
-  
+import numpy as np
+
 def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):
     """  
-    Convert token_transfers.csv to optimized graph format for faster processing.  
-    """  
-    print(f"🚀 Processing {csv_path} with optimized sample size {sample_size}...")  
+    Convert token_transfers.csv to optimized graph format with real addresses and rich metadata.
+    Nodes use actual wallet addresses as IDs and include numeric features for GNNs.
+    """
+    print(f"Processing {csv_path} with optimized sample size {sample_size}...")  
       
     # Create directed graph for token transfers  
     G = nx.DiGraph()  
@@ -16,24 +18,30 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):
     usecols = ['from_address', 'to_address', 'value', 'contract_address']
     
     # Stream and process with smaller chunks
-    chunk_size = 2000
+    chunk_size = 2000  
     for chunk in pd.read_csv(csv_path, chunksize=chunk_size, nrows=sample_size, usecols=usecols):  
         for _, row in chunk.iterrows():  
             from_addr = row.get('from_address')  
             to_addr = row.get('to_address')  
               
             if pd.notna(from_addr) and pd.notna(to_addr) and from_addr != to_addr:  
-                # Convert to string to ensure consistency
+                # Convert to string and lowercase for consistency
                 from_addr = str(from_addr).lower()
                 to_addr = str(to_addr).lower()
                 
-                # ✅ FIX: Use ACTUAL wallet address as label, not "address"
+                # Add nodes with actual address as ID and label
                 if from_addr not in G:  
-                    G.add_node(from_addr, label=from_addr)  # Real address as label
+                    G.add_node(from_addr, 
+                               label=from_addr[:8] + "...",  # Shortened for readability
+                               full_address=from_addr,       # Store full address for reference
+                               feature=[0.0, 0.0])          # For GNN compatibility
+                
                 if to_addr not in G:  
-                    G.add_node(to_addr, label=to_addr)  # Real address as label
+                    G.add_node(to_addr, 
+                               label=to_addr[:8] + "...", 
+                               full_address=to_addr, 
+                               feature=[0.0, 0.0])
                   
-                # Determine token type FIRST for efficiency
                 token_name = 'unknown'
                 if 'contract_address' in row and pd.notna(row['contract_address']):
                     token_contract = str(row['contract_address'])
@@ -44,113 +52,123 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):
                     }
                     token_name = token_mapping.get(token_contract.lower(), 'unknown')
 
-                # Create edge attributes with CORRECT weight (not transaction value)
+                # Create edge attributes
                 edge_attrs = {
-                    'weight': 1.0,  # All transactions equally important
+                    'weight': 1.0,  
                     'label': f'{token_name}_transfer' if token_name != 'unknown' else 'token_transfer',
-                    'type': token_name if token_name != 'unknown' else 'transaction'
+                    'type': token_name if token_name != 'unknown' else 'transaction',
+                    'amount': float(row['value']) if 'value' in row and pd.notna(row['value']) else 0.0,
+                    'token_contract': token_contract if token_name != 'unknown' else None,
+                    'full_label': f"{token_name}_transfer ({row['value']})"  # For visualization
                 }
-                
-                # Add transaction amount (but DON'T use it as weight)
-                if 'value' in row and pd.notna(row['value']):  
-                    amount = float(row['value'])
-                    edge_attrs['amount'] = amount  # Store amount separately
-                    
-                # Add token contract for reference
-                if token_name != 'unknown':
-                    edge_attrs['token_contract'] = token_contract
                   
                 G.add_edge(from_addr, to_addr, **edge_attrs)  
               
             processed += 1  
             if processed % 2000 == 0:  
-                print(f"📊 Processed {processed} transactions...")  
+                print(f"Processed {processed} transactions...")  
           
         if processed >= sample_size:  
             break  
   
-    print(f"✅ Final graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")  
+    print(f" Final graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")  
     
-    # Remove isolated nodes to create cleaner, faster-to-process graph
-    initial_nodes = G.number_of_nodes()
+    # Remove isolated nodes
     isolated_nodes = list(nx.isolates(G))
     G.remove_nodes_from(isolated_nodes)
-    print(f"🧹 Removed {len(isolated_nodes)} isolated nodes for cleaner graph")
+    print(f"Removed {len(isolated_nodes)} isolated nodes for cleaner graph")
     
-    # Analyze the final graph
+    # === ADD ANCHOR NODES FOR GNN ===
+    anchor1 = "ANCHOR_1"
+    anchor2 = "ANCHOR_2"
+    G.add_node(anchor1, label="ANCHOR_1", full_address=anchor1, feature=[1.0, 0.0], is_anchor=True)
+    G.add_node(anchor2, label="ANCHOR_2", full_address=anchor2, feature=[0.0, 1.0], is_anchor=True)
+    
+    # Connect anchors to a central node for alignment
+    if len(G.nodes()) > 2:
+        degrees = dict(G.degree())
+        central_node = max(degrees, key=degrees.get)
+        G.add_edge(anchor1, central_node, label="anchor_edge", type="anchor", weight=0.0, full_label="Anchor → Central")
+        G.add_edge(anchor2, central_node, label="anchor_edge", type="anchor", weight=0.0, full_label="Anchor → Central")
+    else:
+        first_node = list(G.nodes())[0]
+        G.add_edge(anchor1, first_node, label="anchor_edge", type="anchor", weight=0.0, full_label="Anchor → Node")
+        G.add_edge(anchor2, first_node, label="anchor_edge", type="anchor", weight=0.0, full_label="Anchor → Node")
+
+    print(f"Added 2 anchor nodes for node-anchored GNN training.")
+    
+    # Analyze final graph
     analyze_final_graph(G)
       
-    # Convert to the expected dictionary format
+    # Save as dictionary
     graph_data = {
         'nodes': list(G.nodes(data=True)),
         'edges': list(G.edges(data=True))
     }
       
-    # Save as dictionary
     with open(output_pkl, 'wb') as f:  
         pickle.dump(graph_data, f)  
       
-    print(f"💾 Saved optimized network to {output_pkl}")  
-    print("🎯 This smaller dataset will run MUCH faster in your workflow!")
-      
+    print(f" Saved optimized network to {output_pkl}")  
+   
     return graph_data  
 
 def analyze_final_graph(G):
     """Analyze the final graph for optimization insights"""
-    print("\n📈 Final Graph Analysis:")
+    print("\n Final Graph Analysis:")
     print(f"   - Connected nodes: {G.number_of_nodes()}")
     print(f"   - Transactions: {G.number_of_edges()}")
     
     if G.number_of_nodes() > 0:
-        # Calculate basic graph metrics
         in_degrees = [d for n, d in G.in_degree()]
         out_degrees = [d for n, d in G.out_degree()]
-        
         avg_connections = (sum(in_degrees) + sum(out_degrees)) / len(in_degrees)
         print(f"   - Average connections per node: {avg_connections:.2f}")
         
-        # Analyze edge labels
+        # Edge types
         edge_labels = {}
         for edge in G.edges(data=True):
             label = edge[2].get('label', 'unknown')
             if label not in edge_labels:
                 edge_labels[label] = 0
             edge_labels[label] += 1
-        
         print(f"   - Edge types found: {edge_labels}")
         
-        # Check graph connectivity
+        # Check connectivity
         components = nx.number_weakly_connected_components(G)
         if components == 1:
-            print("   - Graph is fully connected: ✅")
+            print("   - Graph is fully connected: yes")
         else:
             print(f"   - Graph has {components} connected components")
             
-        # Sample some nodes to verify our fixes
-        print(f"\n🔍 Sample node verification:")
-        sample_nodes = list(G.nodes(data=True))[:3]
-        for i, (node_addr, attrs) in enumerate(sample_nodes):
-            print(f"   Node {i+1}: {node_addr}")
+        # Sample edges
+        print(f"\n🔍 Sample edge verification:")
+        sample_edges = list(G.edges(data=True))[:2]
+        for i, (src, dst, attrs) in enumerate(sample_edges):
+            print(f"   Edge {i+1}: {src[:8]}... → {dst[:8]}...")
             print(f"     Label: {attrs.get('label', 'N/A')}")
+            print(f"     Amount: {attrs.get('amount', 'N/A')}")
+            print(f"     Full label: {attrs.get('full_label', 'N/A')}")
 
 def verify_saved_graph(pkl_path):  
-    """Verify that the saved pickle file has proper node labels"""  
-    print(f"\n🔎 Verifying {pkl_path}...")  
+    """Verify saved pickle file"""  
+    print(f"\nVerifying {pkl_path}...")  
     with open(pkl_path, 'rb') as f:  
         data = pickle.load(f)  
-        print(f"📁 File type: {type(data)}")  
-        if isinstance(data, dict) and 'nodes' in data:
-            print(f"📊 Number of nodes: {len(data['nodes'])}")  
-            if len(data['nodes']) > 0:
-                sample_node = data['nodes'][0]
-                print(f"🔍 Sample node: {sample_node[0]}")  # The actual address
-                print(f"🔍 Sample node attributes: {sample_node[1]}")
-                print(f"✅ Node label is actual address: {sample_node[1].get('label') == sample_node[0]}")
+        print(f"File type: {type(data)}")  
+        if isinstance(data, dict) and 'edges' in data:
+            print(f"Number of edges: {len(data['edges'])}")  
+            if len(data['edges']) > 0:
+                sample_edge = data['edges'][0]
+                print(f"Sample edge attributes: {sample_edge[2]}")
+                print(f"Edge has 'label': {'label' in sample_edge[2]}")
+                print(f"Edge has 'full_label': {'full_label' in sample_edge[2]}")
+                print(f"Edge has 'amount': {'amount' in sample_edge[2]}")
 
 # Usage  
 if __name__ == "__main__":  
     convert_token_transfers_to_pkl(  
         csv_path='/home/tarik/Downloads/neurograph/neural-subgraph-matcher-miner/script/data/token_transfers.csv',
-        output_pkl='stablecoin_network2.pkl',
-        sample_size=8000
+        output_pkl='stablecoin_network1.pkl',
+        sample_size=8000  
     )
