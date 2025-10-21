@@ -6,7 +6,7 @@ import numpy as np
 def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):
     """  
     Convert token_transfers.csv to optimized graph format with real addresses and rich metadata.
-    Nodes use actual wallet addresses as IDs and include numeric features for GNNs.
+    Nodes use actual wallet addresses as IDs and include meaningful numeric features for GNNs.
     """
     print(f"Processing {csv_path} with optimized sample size {sample_size}...")  
       
@@ -34,7 +34,7 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):
                     G.add_node(from_addr, 
                                label=from_addr[:8] + "...",  # Shortened for readability
                                full_address=from_addr,       # Store full address for reference
-                               feature=[0.0, 0.0])          # For GNN compatibility
+                               feature=[0.0, 0.0])          # Will update after building graph
                 
                 if to_addr not in G:  
                     G.add_node(to_addr, 
@@ -97,6 +97,19 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):
 
     print(f"Added 2 anchor nodes for node-anchored GNN training.")
     
+    # === UPDATE NODE FEATURES WITH MEANINGFUL VALUES ===
+    for node in G.nodes():
+        in_degree = G.in_degree(node)
+        out_degree = G.out_degree(node)
+        # Normalize degrees to avoid large values
+        max_degree = max(1, max(dict(G.degree()).values()))
+        G.nodes[node]['feature'] = [
+            in_degree / max_degree,   # normalized in-degree
+            out_degree / max_degree   # normalized out-degree
+        ]
+    
+    print("✅ Updated node features with normalized in/out degrees.")
+
     # Analyze final graph
     analyze_final_graph(G)
       
