@@ -9,7 +9,6 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):
     
     - Node labels: shortened wallet addresses (e.g., '0xd30b...')
     - Edge labels: 'USDT_transfer (18.67)' for interpretability
-    - Numeric features (in/out degree) stored internally for GNN, not shown in UI
     - Anchor nodes added for node-anchored GNN training
     """
     print(f"Processing {csv_path} with optimized sample size {sample_size}...")  
@@ -35,8 +34,8 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):
                 # Add nodes with CLEAN label = shortened address
                 if from_addr not in G:  
                     G.add_node(from_addr, 
-                               label=from_addr[:8] + "...",      # ← Shown in visualization
-                               feature=[0.0, 0.0])              # ← Updated later for GNN
+                               label=from_addr[:8] + "...",      #  Shown in visualization
+                               feature=[0.0, 0.0])              
                 
                 if to_addr not in G:  
                     G.add_node(to_addr, 
@@ -63,7 +62,7 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):
                 # Edge attributes
                 edge_attrs = {
                     'weight': 1.0,                    # Unbiased weight for GNN
-                    'label': edge_label,              # ← Shown on edges in visualization
+                    'label': edge_label,              # Shown on edges in visualization
                     'type': token_name,
                     'amount': amount,
                     'token_contract': row.get('contract_address')
@@ -109,9 +108,9 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):
             in_deg = G.in_degree(node) / max_degree
             out_deg = G.out_degree(node) / max_degree
             G.nodes[node]['feature'] = [in_deg, out_deg]
-        print("✅ Node features updated with normalized degrees (for GNN training).")
+        print("Node features updated with normalized degrees (for GNN training).")
     else:
-        print("⚠️  Graph has no nodes after cleaning.")
+        print("Graph has no nodes after cleaning.")
 
     # Save as dictionary
     graph_data = {
@@ -122,12 +121,12 @@ def convert_token_transfers_to_pkl(csv_path, output_pkl, sample_size=8000):
     with open(output_pkl, 'wb') as f:  
         pickle.dump(graph_data, f)  
       
-    print(f"✅ Saved optimized network to {output_pkl}")  
+    print(f"Saved optimized network to {output_pkl}")  
     return graph_data  
 
-# Optional: verification function
+#verification function
 def verify_saved_graph(pkl_path):  
-    print(f"\n🔍 Verifying {pkl_path}...")  
+    print(f"\n Verifying {pkl_path}...")  
     with open(pkl_path, 'rb') as f:  
         data = pickle.load(f)  
         print(f"Type: {type(data)}")  
@@ -149,5 +148,5 @@ if __name__ == "__main__":
         output_pkl='stablecoin_network1.pkl',
         sample_size=8000  
     )
-    # Optional: verify
-    # verify_saved_graph('stablecoin_network1.pkl')
+    #verify
+    verify_saved_graph('stablecoin_network1.pkl')
