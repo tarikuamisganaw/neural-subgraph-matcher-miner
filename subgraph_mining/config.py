@@ -76,7 +76,7 @@ def parse_decoder(parser):
         min_neighborhood_size=5,
         max_neighborhood_size=10,
         search_strategy="greedy",
-        out_batch_size=10,
+        out_batch_size=3,
         node_anchored=True,
         memory_limit=1000000
     )
