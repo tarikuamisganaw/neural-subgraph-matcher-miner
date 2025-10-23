@@ -78,5 +78,6 @@ def parse_decoder(parser):
         search_strategy="greedy",
         out_batch_size=3,
         node_anchored=True,
+        
         memory_limit=1000000
     )
