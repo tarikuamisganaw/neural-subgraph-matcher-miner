@@ -2,44 +2,21 @@ name: Run Decoder
 
 on:
   push:
-    branches: [main]
+    branches: [main, crypto,try-with-mining-only]
   pull_request:
-    branches: [main]
+    branches: [main, crypto,try-with-mining-only]
   workflow_dispatch:
 
 jobs:
   run-decoder:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          load: true
-          tags: decoder-image:latest
-          cache-from: |
-            type=local,src=/tmp/.buildx-cache
-          cache-to: |
-            type=local,dest=/tmp/.buildx-cache-new,mode=max
-
-      - name: Move cache
+      - name: Pull prebuilt Docker image
         run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          docker pull tarikua123/decoder-image:latest
 
       - name: Create output directories
         run: |
@@ -63,14 +40,15 @@ jobs:
       - name: Run decoder in Docker container
         run: |
           docker run --rm \
+            --shm-size=2g \
             -v ${{ github.workspace }}:/app \
             -e PYTHONUNBUFFERED=1 \
-            decoder-image:latest \
+            tarikua123/decoder-image:latest \
             bash -c "
               set -e
               echo 'Starting decoder run...'
               python -m subgraph_mining.decoder \
-                --dataset=directed.pkl \
+                --dataset=stablecoin_network1.pkl \
                 --n_trials=200 \
                 --node_anchored \
                 --out_path=/app/results/patterns.pkl \
@@ -78,45 +56,29 @@ jobs:
               echo 'Checking output directories...'
               ls -la /app/plots/cluster
               ls -la /app/results
-              "
-      # - name: Run pattern counter in Docker container
+            "
+
+      # - name: Run matcher in Docker container
       #   run: |
       #     docker run --rm \
+      #       --shm-size=2g \
       #       -v ${{ github.workspace }}:/app \
       #       -e PYTHONUNBUFFERED=1 \
-      #       decoder-image:latest \
+      #       tarikua123/decoder-image:latest \
       #       bash -c "
       #         set -e
-      #         export PYTHONPATH=/app
-      #         echo 'Running pattern counter...'
-      #         python -m analyze.count_patterns \
-      #           --dataset=graph.pkl \
-      #           --queries_path=results/patterns.pkl \
-      #           --out_path=results/ \
+      #         echo 'Starting matcher run on cryptocurrency dataset...'
+      #         python -m subgraph_matching.train \
+      #           --dataset=graph \
+      #           --graph_pkl_path=graph.pkl \
       #           --node_anchored \
-      #           --preserve_labels
-      #         echo 'Counting completed.'
+      #           --batch_size 16 \
+      #           --val_size 128
+      #         echo 'Checking output directories...'
       #         ls -la /app/results
+      #         ls -la /app/plots
       #       "
-      - name: Run matcher in Docker container
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/app \
-            -e PYTHONUNBUFFERED=1 \
-            decoder-image:latest \
-            bash -c "
-              set -e
-              echo 'Starting matcher run on custom gene graph...'
-              python -m subgraph_matching.train \
-                --dataset=graph \
-                --graph_pkl_path=graph.pkl \
-                --node_anchored \
-                --batch_size 16 \
-                --val_size 128
-              echo 'Checking output directories...'
-              ls -la /app/results
-              ls -la /app/plots
-            "
+
       - name: Check for generated files
         run: |
           echo "Checking plots directory:"
