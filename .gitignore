@@ -12,3 +12,5 @@ results/
 orca/
 core
 deepsnap-experimental/
+.env
+.env.*
