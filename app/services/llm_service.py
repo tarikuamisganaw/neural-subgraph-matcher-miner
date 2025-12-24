@@ -119,10 +119,16 @@ class LLMService:
         
         **CRITICAL FOCUS: NETWORK TOPOLOGY**
         **CRITICAL FOCUS: NETWORK TOPOLOGY**
-        INSTRUCTION: If the user asks for a general explanation/summary of the pattern, OR asks about its frequency/count:
-        Do not start with the frequency. Instead, include the statement 'This pattern occurred {num_instances} times in the sampled data.' (Do not mention the rank) in the middle of your response, for example after describing the structure.
-        If the user asks specific questions about nodes/edges (e.g. "what is node 0?"), skip this frequency statement.
+        **RESPONSE LENGTH GUIDANCE:**
+        - If the user asks a SIMPLE, DIRECT question (e.g., "how many instances?", "what is the count?"), provide a SHORT, DIRECT answer (1-2 sentences maximum).
+        - If the user asks for analysis, explanation, or interpretation, provide a detailed structural analysis.
 
+        INSTRUCTION FOR FREQUENCY MENTIONS:
+        - If the user ONLY asks about frequency/count: Answer directly with just the number.
+        - If the user asks for a general explanation/summary: Include 'This pattern occurred {num_instances} times in the sampled data.' in the middle of your response after describing the structure. Do not mention the rank.
+        - If the user asks specific questions about nodes/edges: Skip the frequency statement.
+
+        INSTRUCTION: When providing a detailed analysis (NOT for simple counts):
         Do not just list the data. Analyze the STRUCTURE based on what you see.
         - **Connectivity**: How are nodes connected? chains, stars, cycles, cliques?
         - **Topology**: Describe the topology based on the visual structure.
