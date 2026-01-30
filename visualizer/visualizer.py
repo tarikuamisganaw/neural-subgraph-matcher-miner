@@ -542,8 +542,8 @@ class HTMLTemplateProcessor:
             
             # Inject environment-based URLs
             import os
-            api_port = os.getenv("NEURAL_MINER_PORT", "9002")
-            tool_port = os.getenv("ANNOTATION_TOOL_PORT", "3000")
+            api_port = os.getenv("NEURAL_MINER_PORT", "59002")
+            tool_port = os.getenv("ANNOTATION_TOOL_PORT", "53000")
             
             env_script = f"""
         window.API_URL = 'http://localhost:{api_port}/chat';
@@ -786,6 +786,13 @@ def visualize_pattern_graph_ext(pattern, args, count_by_size, pattern_key=None):
                 output_dir=output_dir
             )
             
+            # Also generate static PNG for backward compatibility
+            try:
+                visualize_pattern_graph(pattern, args, count_by_size)
+                logger.info(f"Static PNG visualization generated in {output_dir}")
+            except Exception as e:
+                logger.warning(f"Static PNG generation failed: {e}")
+
             logger.info(f"HTML visualization created successfully: {output_path}")
 
         except FileNotFoundError as e:
@@ -995,6 +1002,15 @@ def visualize_all_pattern_instances(pattern_instances, pattern_key, count, outpu
                     output_filename="representative.html",
                     output_dir=pattern_dir
                 )
+
+                # Also generate static PNG for backward compatibility
+                try:
+                    # Map pattern_key to count_by_size format for filename compatibility
+                    num_nodes = len(representative)
+                    visualize_pattern_graph(representative, None, {num_nodes: pattern_key})
+                except Exception as e:
+                    logger.warning(f"Static PNG generation failed for representative: {e}")
+
                 logger.info(f"  ✓ Created representative visualization")
             except Exception as e:
                 logger.error(f"  Failed to create representative: {e}")

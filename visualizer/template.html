@@ -998,12 +998,12 @@
 
         // Navigation Helper
         function openLink(path) {
-            const baseUrl = window.ANNOTATION_TOOL_URL || 'http://localhost:3000';
+            const baseUrl = window.ANNOTATION_TOOL_URL || 'http://localhost:53000';
             const url = path ? `${baseUrl}/${path}` : baseUrl;
             window.open(url, '_blank');
         }
 
-        const apiUrl = window.API_URL || 'http://localhost:9002/chat';
+        const apiUrl = window.API_URL || 'http://localhost:59002/chat';
 
         // Sample 7-node directed graph data
         const GRAPH_DATA = {

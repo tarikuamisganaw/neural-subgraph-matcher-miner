@@ -20,6 +20,5 @@ app.include_router(chat_router)
 
 if __name__ == "__main__":
     import os
-    port = int(os.getenv("PORT", 9002))
+    port = int(os.environ['PORT'])
     uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True)
-

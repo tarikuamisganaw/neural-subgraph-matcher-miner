@@ -1,0 +1,6 @@
+plots/
+results/
+*.pkl
+__pycache__/
+.git/
+.github/
