@@ -18,12 +18,17 @@ class LLMService:
         return cls._instance
 
     def _initialize(self):
-        """Initialize Gemini model settings and load patterns."""
-        self.api_key = os.getenv("GEMINI_API_KEY")
-        self.model_name = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-flash")
+        """Initialize model settings and load patterns."""
+        # Gemini settings
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        self.gemini_model = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-flash")
         
-        if not self.api_key:
-            logger.warning("GEMINI_API_KEY not found in environment variables.")
+        # BioGPT settings (Hugging Face)
+        self.hf_api_key = os.getenv("HF_API_KEY")
+        self.biogpt_model = os.getenv("BIOGPT_MODEL_NAME", "microsoft/biogpt")
+
+        if not self.gemini_api_key and not self.hf_api_key:
+            logger.warning("No API keys (GEMINI_API_KEY or HF_API_KEY) found in environment variables.")
         
         self._load_patterns()
 
@@ -62,18 +67,10 @@ class LLMService:
                 return item
         return None
 
-    def analyze_motif(self, graph_data: Dict[str, Any], user_query: str, pattern_key: Optional[str] = None, api_key: Optional[str] = None) -> str:
+    def analyze_motif(self, graph_data: Dict[str, Any], user_query: str, pattern_key: Optional[str] = None, api_key: Optional[str] = None, model_choice: str = "gemini") -> str:
         """
-        Analyze a motif using Gemini REST API, integrating graph structure and instance context.
+        Analyze a motif using the selected model, integrating graph structure and instance context.
         """
-        """
-        Analyze a motif using Gemini REST API, integrating graph structure and instance context.
-        """
-        current_api_key = api_key if api_key else self.api_key
-
-        if not current_api_key:
-             return "Error: GEMINI_API_KEY not found. Please provide it in the interface or configure it in the environment."
-
         context_str = ""
         num_instances = "unknown"
         if pattern_key:
@@ -130,14 +127,26 @@ class LLMService:
         
         Provide a concise, insightful answer focusing on the structural implications of this pattern.
         """
-        
+
+        if model_choice.lower() == "biogpt":
+            return self._call_biogpt(prompt, api_key)
+        else:
+            return self._call_gemini(prompt, api_key)
+
+    def _call_gemini(self, prompt: str, api_key: Optional[str] = None) -> str:
+        """Call Gemini REST API."""
+        current_api_key = api_key if api_key else self.gemini_api_key
+        if not current_api_key:
+            return "Error: GEMINI_API_KEY not found. Please provide it in the interface or configure it in the environment."
+
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={current_api_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={current_api_key}"
             payload = {
                 "contents": [{
                     "parts": [{"text": prompt}]
                 }]
             }
+            # Set WaitMsBeforeAsync to a larger value for network requests
             response = requests.post(url, json=payload, timeout=30)
             response.raise_for_status()
             
@@ -148,4 +157,79 @@ class LLMService:
                 return "Error: No response generated from Gemini API."
         except Exception as e:
             logger.error(f"Gemini REST API call failed: {e}")
-            return f"Error processing your request: {e}"
+            return f"Error processing your request with Gemini: {e}"
+
+    def _initialize_biogpt(self):
+        """Lazy initialization of the local BioGPT model."""
+        if hasattr(self, '_biogpt_pipeline'):
+            return
+
+        try:
+            logger.info(f"Loading local BioGPT model: {self.biogpt_model}...")
+            from transformers import pipeline, BioGptTokenizer, BioGptForCausalLM
+            
+            # Load tokenizer and model
+            tokenizer = BioGptTokenizer.from_pretrained(self.biogpt_model)
+            model = BioGptForCausalLM.from_pretrained(self.biogpt_model)
+            
+            # Create generation pipeline
+            self._biogpt_pipeline = pipeline(
+                'text-generation', 
+                model=model, 
+                tokenizer=tokenizer,
+                device=-1
+            )
+            # Store tokenizer separately for truncation logic
+            self._biogpt_tokenizer = tokenizer
+            logger.info("BioGPT model loaded successfully.")
+        except Exception as e:
+            logger.error(f"Failed to load local BioGPT model: {e}")
+            raise e
+
+    def _call_biogpt(self, prompt: str, api_key: Optional[str] = None) -> str:
+        """Call BioGPT locally using transformers pipeline."""
+        try:
+            self._initialize_biogpt()
+            
+            # 1. Handle Context Limit: BioGPT has a max context of 1024 tokens.
+            # We manually truncate the prompt if it's too long to avoid "index out of range".
+            max_input_tokens = 800  # Leave ~200 for generation
+            
+            tokens = self._biogpt_tokenizer.encode(prompt, add_special_tokens=True)
+            if len(tokens) > max_input_tokens:
+                logger.warning(f"Prompt truncated for BioGPT: {len(tokens)} -> {max_input_tokens} tokens")
+                # Truncate from the beginning (keep the most recent context/instruction)
+                # or from the end depends on the prompt structure. 
+                # For BioGPT, the instruction and graph data are usually at the start.
+                # However, causal LMs usually need the end of the prompt to be most relevant.
+                # Here we truncate from the end of the input tokens to keep the header and structure.
+                tokens = tokens[:max_input_tokens]
+                truncated_prompt = self._biogpt_tokenizer.decode(tokens, skip_special_tokens=True)
+            else:
+                truncated_prompt = prompt
+
+            # Generate response
+            results = self._biogpt_pipeline(
+                truncated_prompt, 
+                max_new_tokens=200, 
+                num_return_sequences=1,
+                do_sample=True,
+                temperature=0.7,
+                top_k=50,
+                top_p=0.95
+            )
+            
+            # Update the prompt reference for the 'startswith' check below
+            used_prompt = truncated_prompt
+            
+            if results and len(results) > 0:
+                generated_text = results[0].get('generated_text', "")
+                # BioGPT returns the full prompt + the new text. We want just the new text.
+                if generated_text.startswith(used_prompt):
+                    return generated_text[len(used_prompt):].strip()
+                return generated_text.strip()
+            else:
+                return "Error: BioGPT failed to generate a response."
+        except Exception as e:
+            logger.error(f"Local BioGPT execution failed: {e}")
+            return f"Error processing your request with local BioGPT: {e}. Ensure 'transformers' and 'sacremoses' are installed."

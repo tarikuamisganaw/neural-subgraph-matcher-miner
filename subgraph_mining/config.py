@@ -72,7 +72,7 @@ def parse_decoder(parser):
         batch_size=1000,
         
         # Decoder defaults
-        out_path="results/patterns.p",
+        out_path="results/patterns.pkl",
         n_neighborhoods=100,
         n_trials=100,
         decode_thresh=0.5,
@@ -81,10 +81,10 @@ def parse_decoder(parser):
         sample_method="tree",
         skip="learnable",
         graph_type="directed",
-        min_pattern_size=3,
-        max_pattern_size=5,
-        min_neighborhood_size=2,
-        max_neighborhood_size=3,
+        min_pattern_size=5,
+        max_pattern_size=10,
+        min_neighborhood_size=10,
+        max_neighborhood_size=15,
         search_strategy="greedy",
         out_batch_size=3,
         node_anchored=True,
